@@ -15,9 +15,16 @@ on:
         description: 'ninja 타깃'
         default: 'chrome'
         required: true
+      gn_args:
+        description: 'gn args (선택사항)'
+        default: ''
+        required: false
 
   repository_dispatch:
     types: [swan-windows-build-trigger]
+
+  schedule:
+    - cron: '0 2 * * *'
 
 jobs:
   build:
@@ -28,7 +35,20 @@ jobs:
       run:
         shell: powershell
 
+    env:
+      BUILD_TYPE: ${{ github.event.client_payload.target || inputs.target || 'chrome' }}
+      JOBS_PARALLEL: ${{ github.event.client_payload.jobs || inputs.jobs || '' }}
+      GN_ARGS: ${{ github.event.client_payload.gn_args || inputs.gn_args || '' }}
+
     steps:
+      - name: 빌드 시작 알림
+        run: |
+          Write-Host "::notice::Windows Build Started"
+          Write-Host "Build Type: ${{ env.BUILD_TYPE }}"
+          Write-Host "Jobs: ${{ env.JOBS_PARALLEL }}"
+          Write-Host "Trigger: ${{ github.event_name }}"
+          Write-Host "Actor: ${{ github.actor }}"
+
       - uses: actions/checkout@v4
         with:
           path: src
@@ -37,17 +57,51 @@ jobs:
 
       - name: 빌드 환경 정보
         run: |
-          Write-Host "##[group]Build environment"
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
-          Get-CimInstance Win32_ComputerSystem | Select-Object Name, NumberOfLogicalProcessors
-          Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize
+          Write-Host "##[group]System Information"
+          Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+          Get-CimInstance Win32_OperatingSystem | Select-Object @{Name='OS';Expression={$_.Caption}}, @{Name='Version';Expression={$_.Version}}, @{Name='Build';Expression={$_.BuildNumber}}
+          Write-Host ""
+          Get-CimInstance Win32_ComputerSystem | Select-Object @{Name='Computer';Expression={$_.Name}}, @{Name='Processors';Expression={$_.NumberOfLogicalProcessors}}
+          Write-Host ""
+          $totalMemory = [math]::Round((Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize / 1MB, 2)
+          Write-Host "Total Memory: $totalMemory GB"
           Write-Host "##[endgroup]"
 
-      - name: 빌드 (autoninja)
+      - name: 소스 코드 상태 확인
         working-directory: src
         run: |
-          $jobs = '${{ github.event.client_payload.jobs || inputs.jobs }}'
-          $target = '${{ github.event.client_payload.target || inputs.target || "chrome" }}'
+          Write-Host "##[group]Source Code Status"
+          git status
+          git log --oneline -5
+          Write-Host "##[endgroup]"
+
+      - name: 빌드 환경 준비
+        working-directory: src
+        run: |
+          Write-Host "##[group]Build Setup"
+          if ($env:GN_ARGS) {
+            Write-Host "Custom GN Args: $env:GN_ARGS"
+            gn gen out/swan --args="$env:GN_ARGS"
+          } else {
+            Write-Host "Using default GN configuration"
+            if (-not (Test-Path "out/swan")) {
+              gn gen out/swan
+            }
+          }
+          Write-Host "##[endgroup]"
+
+      - name: 빌드 실행 (autoninja)
+        id: build
+        working-directory: src
+        run: |
+          $target = $env:BUILD_TYPE
+          $jobs = $env:JOBS_PARALLEL
+
+          Write-Host "##[group]Build Execution"
+          Write-Host "Target: $target"
+          Write-Host "Parallel Jobs: $(if ($jobs) { $jobs } else { 'auto' })"
+
+          $buildStartTime = Get-Date
 
           if ($jobs) {
             autoninja -C out/swan -j $jobs $target
@@ -55,19 +109,36 @@ jobs:
             autoninja -C out/swan $target
           }
 
+          $buildEndTime = Get-Date
+          $buildDuration = $buildEndTime - $buildStartTime
+
+          Write-Host "Build Duration: $($buildDuration.ToString('hh\:mm\:ss'))"
+          Write-Host "##[endgroup]"
+
+          "duration=$($buildDuration.TotalSeconds)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: 빌드 결과 검증
         if: success()
         working-directory: src
         run: |
-          $target = '${{ github.event.client_payload.target || inputs.target || "chrome" }}'
+          Write-Host "##[group]Build Verification"
+
+          $target = $env:BUILD_TYPE
           $artifact = "out/swan/$target.exe"
 
-          if (-not (Test-Path $artifact)) {
+          if (Test-Path $artifact) {
+            $fileInfo = Get-Item $artifact
+            $sizeInMB = [math]::Round($fileInfo.Length / 1MB, 2)
+            Write-Host "✓ Build Artifact Found"
+            Write-Host "  File: $($fileInfo.FullName)"
+            Write-Host "  Size: $sizeInMB MB"
+            Write-Host "  Modified: $($fileInfo.LastWriteTime)"
+          } else {
             Write-Error "Build artifact not found: $artifact"
             exit 1
           }
 
-          Get-Item $artifact | Select-Object FullName, Length
+          Write-Host "##[endgroup]"
 
       - name: 빌드 아티팩트 업로드
         if: success()
@@ -77,15 +148,67 @@ jobs:
           path: src/out/swan/
           if-no-files-found: error
           retention-days: 7
+          compression-level: 6
 
-      - name: 실패 시 최근 로그 출력
+      - name: 빌드 통계
+        if: always()
+        working-directory: src
+        run: |
+          Write-Host "##[group]Build Statistics"
+
+          if (Test-Path "out/swan") {
+            $totalSize = (Get-ChildItem -Path "out/swan" -Recurse | Measure-Object -Property Length -Sum).Sum
+            $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
+            Write-Host "Total Output Size: $totalSizeMB MB"
+
+            $fileCount = (Get-ChildItem -Path "out/swan" -Recurse -File).Count
+            Write-Host "Total Files: $fileCount"
+          }
+
+          Write-Host "Build Status: ${{ job.status }}"
+          Write-Host "##[endgroup]"
+
+      - name: 실패 시 진단 정보 수집
         if: failure()
         working-directory: src
         run: |
+          Write-Host "##[group]Diagnostic Information"
+
           if (Test-Path "out/swan") {
-            Get-ChildItem -Path "out/swan" -Recurse -Include *.log | ForEach-Object {
-              Write-Host "##[group]$($_.FullName)"
-              Get-Content $_.FullName -Tail 100
+            $logFiles = Get-ChildItem -Path "out/swan" -Recurse -Include *.log | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 5
+
+            foreach ($log in $logFiles) {
+              Write-Host "##[group]$($log.Name)"
+              Write-Host "Last 200 lines of: $($log.FullName)"
+              Get-Content $log.FullName -Tail 200 -ErrorAction SilentlyContinue
               Write-Host "##[endgroup]"
             }
           }
+
+          Write-Host "##[group]Disk Space"
+          Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{Name='Used(GB)';Expression={[math]::Round(($_.Used/1GB),2)}}, @{Name='Free(GB)';Expression={[math]::Round(($_.Free/1GB),2)}}
+          Write-Host "##[endgroup]"
+
+      - name: 빌드 완료 알림
+        if: always()
+        run: |
+          if ('${{ job.status }}' -eq 'success') {
+            Write-Host "::notice::Windows Build Completed Successfully ✓"
+          } else {
+            Write-Host "::error::Windows Build Failed ✗"
+          }
+
+  notify:
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 빌드 결과 요약
+        run: |
+          echo "## Swan Windows Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
