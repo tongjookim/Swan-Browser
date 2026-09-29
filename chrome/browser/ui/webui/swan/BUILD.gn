@@ -1,0 +1,28 @@
+# Copyright 2026 The Suwan News Company. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+source_set("swan") {
+  sources = [
+    "swan_handler.cc",
+    "swan_ui.cc",
+  ]
+  public = [
+    "swan_handler.h",
+    "swan_ui.h",
+  ]
+  public_deps = [
+    "//base",
+    "//chrome/browser/swan",
+    "//chrome/common",
+    "//content/public/browser",
+  ]
+  deps = [
+    "//chrome/browser/profiles:profile",
+    "//chrome/browser/resources/swan:resources",
+    "//chrome/browser/ui/navigator",
+    "//components/prefs",
+    "//services/network/public/mojom",
+    "//ui/webui",
+  ]
+}

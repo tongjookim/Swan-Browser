@@ -1,0 +1,42 @@
+# Copyright 2026 The Suwan News Company. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# SWAN: OAuth login (loopback redirect intercepted in the login tab), CODA
+# gateway/web fetch bridge, encrypted token store and page-context reader.
+# UI lives in //chrome/browser/ui/webui/swan and //chrome/browser/resources/swan.
+source_set("swan") {
+  sources = [
+    "swan_fetcher.cc",
+    "swan_fetcher.h",
+    "swan_login_tab_helper.cc",
+    "swan_login_tab_helper.h",
+    "swan_navigation_throttle.cc",
+    "swan_navigation_throttle.h",
+    "swan_page_context.cc",
+    "swan_page_context.h",
+    "swan_prefs.cc",
+    "swan_prefs.h",
+    "swan_token_store.cc",
+    "swan_token_store.h",
+    "swan_url_safety.cc",
+    "swan_url_safety.h",
+  ]
+  public_deps = [
+    "//base",
+    "//content/public/browser",
+    "//url",
+  ]
+  deps = [
+    "//base:i18n",
+    "//chrome/browser:browser_process",
+    "//chrome/browser/profiles:profile",
+    "//chrome/common:constants",
+    "//components/os_crypt/async/browser",
+    "//components/os_crypt/async/common",
+    "//components/prefs",
+    "//net",
+    "//services/network/public/cpp",
+    "//services/network/public/mojom",
+  ]
+}

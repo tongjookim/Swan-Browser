@@ -1,0 +1,27 @@
+# Copyright 2026 The Suwan News Company. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//ui/webui/resources/tools/build_webui.gni")
+
+assert(!is_android)
+
+build_webui("build") {
+  grd_prefix = "swan"
+  static_files = [
+    "swan.html",
+    "swan.css",
+  ]
+  ts_files = [
+    "browser_proxy.ts",
+    "coda_client.ts",
+    "config.ts",
+    "main.ts",
+    "web_search_duckduckgo.ts",
+  ]
+
+  ts_composite = true
+  ts_definitions = [ "//tools/typescript/definitions/chrome_send.d.ts" ]
+  ts_deps = [ "//ui/webui/resources/js:build_ts" ]
+  webui_context_type = "trusted"
+}

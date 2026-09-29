@@ -1,0 +1,247 @@
+/* Copyright 2026 The Suwan News Company. All rights reserved.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file. */
+
+:root {
+  --accent-fg: #fff;
+  --accent: #6d28d9;
+  --bg: #fff;
+  --border: #e4e7ec;
+  --bubble-bot: #f6f7f9;
+  --bubble-user: #f1ecfd;
+  --error-bg: #fef3f2;
+  --error: #b42318;
+  --fg: #1f2430;
+  --muted: #667085;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --accent-fg: #16181d;
+    --accent: #a78bfa;
+    --bg: #16181d;
+    --border: #2c303a;
+    --bubble-bot: #20232b;
+    --bubble-user: #2a2440;
+    --error-bg: #3b1f1c;
+    --error: #ffb4a9;
+    --fg: #e8eaf0;
+    --muted: #9aa3b2;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  margin: 0 auto;
+  max-width: 760px;
+  min-height: 100vh;
+  padding: 0 16px 24px;
+}
+
+header {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding: 14px 0;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.brand-sub {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+#account {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 13px;
+  gap: 10px;
+}
+
+#notice {
+  background: var(--error-bg);
+  border-radius: 8px;
+  color: var(--error);
+  margin: 12px 0 0;
+  padding: 10px 12px;
+}
+
+main {
+  padding-top: 16px;
+}
+
+button {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  padding: 8px 14px;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+
+button.primary:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+button.link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 4px 0;
+  text-decoration: underline;
+}
+
+#messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 240px;
+  padding-bottom: 12px;
+}
+
+.msg {
+  border-radius: 12px;
+  max-width: 92%;
+  padding: 10px 14px;
+}
+
+.msg.user {
+  align-self: flex-end;
+  background: var(--bubble-user);
+}
+
+.msg.assistant {
+  align-self: flex-start;
+  background: var(--bubble-bot);
+}
+
+.msg.pending {
+  color: var(--muted);
+}
+
+.msg.error {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+.msg p {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.msg .hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.msg h3 {
+  font-size: 13px;
+  margin: 10px 0 4px;
+}
+
+.msg ul {
+  margin: 0;
+  padding-inline-start: 18px;
+}
+
+.msg li {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 6px 0;
+  padding: 8px 10px;
+}
+
+.card .title {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.card .host {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.card .summary,
+.card .snippet {
+  font-size: 13px;
+  margin: 6px 0 0;
+}
+
+.card .snippet {
+  color: var(--muted);
+}
+
+.steps {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+#form {
+  background: var(--bg);
+  bottom: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  position: sticky;
+}
+
+#input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  flex: 1;
+  font: inherit;
+  padding: 10px 12px;
+}
+
+#settings {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 10px;
+}
+
+#settings summary {
+  cursor: pointer;
+}
+
+.opt {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.opt small {
+  color: var(--muted);
+}

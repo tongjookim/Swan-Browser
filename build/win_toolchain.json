@@ -1,0 +1,7 @@
+{
+  "path": "/home/chromium/wintc",
+  "version": "2026",
+  "win_sdk": "/home/chromium/wintc/Windows Kits/10",
+  "wdk": "/home/chromium/wintc/wdk",
+  "runtime_dirs": []
+}

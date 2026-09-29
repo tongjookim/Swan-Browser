@@ -1,0 +1,21 @@
+# Copyright 2026 The Suwan News Company. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+source_set("swan") {
+  sources = [
+    "swan_commands.cc",
+    "swan_commands.h",
+  ]
+  public_deps = [ "//base" ]
+  deps = [
+    "//chrome/browser/swan",
+    "//chrome/browser/ui:singleton_tabs",
+    "//chrome/browser/ui/browser_window",
+    "//chrome/common",
+    "//components/tabs:public",
+    "//content/public/browser",
+    "//content/public/common",
+    "//url",
+  ]
+}
