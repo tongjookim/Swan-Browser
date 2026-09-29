@@ -1,0 +1,7 @@
+[Unit]
+Description=SWAN build CPU limit: 주간 복귀(07:00~01:00): 빌드 CPU 4코어, 물리 코어 4-7 고정
+
+[Service]
+Type=oneshot
+# swan-build 가 실행 중이 아니면 조용히 무시(-). --runtime: 재부팅 후 남지 않음.
+ExecStart=-/usr/bin/systemctl --runtime set-property swan-build.service CPUQuota=400% AllowedCPUs=4-7,12-15

@@ -1,0 +1,9 @@
+[Unit]
+Description=SWAN build CPU limit timer: 야간 부스트(01:00~07:00): 빌드에 CPU 10코어, 물리 코어 2-7
+
+[Timer]
+OnCalendar=*-*-* 01:00:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

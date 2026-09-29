@@ -1,0 +1,22 @@
+# SWAN — 브라우저 UI(TypeScript) 단위 테스트. 가볍다(수십 초) — 관련 파일이 바뀔 때마다 실행.
+name: swan-ts-tests
+on:
+  push:
+    paths: ['chrome/browser/resources/swan/**']
+  pull_request:
+    paths: ['chrome/browser/resources/swan/**']
+  workflow_dispatch:
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: chrome/browser/resources/swan
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+      - name: 테스트 실행
+        working-directory: chrome/browser/resources/swan/node_tests
+        run: node --import ./ts_loader.mjs --test coda_client_test.mjs web_search_duckduckgo_test.mjs

@@ -1,0 +1,28 @@
+# SWAN (Chromium 157.0.8079.0 기반) — Windows x64 크로스 컴파일 (Linux 호스트, xwin SDK)
+target_os = "win"
+target_cpu = "x64"
+
+is_debug = false
+is_component_build = false
+is_official_build = false          # 공식 빌드는 PGO/ThinLTO 로 매우 느림 → 테스트 빌드는 끔
+symbol_level = 0
+blink_symbol_level = 0
+dcheck_always_on = false
+treat_warnings_as_errors = false   # 비공식 SDK 헤더로 인한 경고 때문에 빌드가 멈추지 않게
+
+# 코덱(H.264/AAC) 포함 — 라이선스 검토 결과에 따라 릴리스 전에 다시 결정 (AGENT.md 7장)
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+
+
+# Google 서비스 미사용 (AGENT.md 3.5.5) — 키를 넣지 않음
+google_api_key = ""
+google_default_client_id = ""
+google_default_client_secret = ""
+
+# Windows SDK/CRT 는 args 로 지정하지 않는다: swan/build/setup_wintc.py 가 build/win_toolchain.json 을 써서
+# Chromium 의 기본 경로(vs_toolchain.py)가 xwin 툴체인(MSVC 14.51 + SDK 10.0.28000)을 그대로 쓴다.
+# (visual_studio_path 를 직접 지정하면 visual_studio_runtime_dirs 가 리스트가 되어 GN 이 실패한다)
+
+# xwin CRT 라이브러리(libcmt.lib 등)는 원본 PDB 없이 배포되어 lld-link 가 LNK4099 경고를 낸다. 기본값(true)은 /WX 라 링크가 실패한다.
+fatal_linker_warnings = false

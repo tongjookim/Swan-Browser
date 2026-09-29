@@ -1,0 +1,9 @@
+[Unit]
+Description=SWAN build CPU limit timer: 주간 복귀(07:00~01:00): 빌드 CPU 4코어, 물리 코어 4-7 고정
+
+[Timer]
+OnCalendar=*-*-* 07:00:00
+Persistent=false
+
+[Install]
+WantedBy=timers.target

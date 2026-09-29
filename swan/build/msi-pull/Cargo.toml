@@ -1,0 +1,9 @@
+[package]
+name = "msi-pull"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+msi = "0.10.0"
+cab = "0.6.0"
+anyhow = "1"

@@ -1,0 +1,159 @@
+# SWAN — Windows x64 빌드 (swan.exe)
+#
+# 수동 실행(workflow_dispatch) 전용: 전체 빌드는 매우 무겁기 때문에 push 마다 돌리지 않는다.
+#
+# 러너 선택이 가장 중요하다:
+#  * GitHub 호스티드 러너는 작업당 6시간 제한이 있다. 4코어 표준 러너(windows-2022)로는
+#    Chromium 전체 빌드가 끝나지 않는다(대략 12시간 이상). 유료 "larger runner"(32코어 이상)나
+#    **self-hosted 러너(사용자 Windows PC 권장)** 를 쓴다. self-hosted 는 작업 폴더가 유지되어
+#    중간에 끊겨도 다시 실행하면 이어서 빌드한다(증분).
+#  * 러너 디스크 여유 150GB 이상, 메모리 32GB 이상 필요.
+#
+# 사용 전 준비는 swan/windows/GITHUB_ACTIONS.md 참고. (아직 GitHub 에서 실행해 본 적 없음 — 첫 실행 로그로 보정 필요)
+name: swan-windows-build
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'runs-on 라벨 (JSON 배열). 예: ["self-hosted","windows","x64"] 또는 ["windows-2022"]'
+        default: '["self-hosted","windows","x64"]'
+        required: true
+      jobs:
+        description: 'autoninja 병렬도(-j). 비우면 자동'
+        default: ''
+        required: false
+      target:
+        description: 'ninja 타깃'
+        default: 'chrome'
+        required: true
+
+concurrency:
+  group: swan-windows-build
+  cancel-in-progress: false
+
+env:
+  DEPOT_TOOLS_WIN_TOOLCHAIN: '0'   # depot_tools 의 MS 내부 툴체인 대신 러너에 설치된 Visual Studio 사용
+  DEPOT_TOOLS_UPDATE: '0'
+  NINJA_STATUS: '[%f/%t %e] '
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  build:
+    runs-on: ${{ fromJSON(inputs.runner) }}
+    timeout-minutes: 350            # 호스티드 한도(360). self-hosted 로 오래 걸리면 늘려도 된다.
+    steps:
+      - name: 소스 체크아웃 (deps 보존을 위해 clean 안 함)
+        uses: actions/checkout@v4
+        with:
+          path: src
+          fetch-depth: 1
+          clean: false              # 기본값(git clean -ffdx)이면 gclient 가 받은 deps 가 매번 지워진다
+
+      - name: 디스크/메모리 확인
+        run: |
+          Get-PSDrive C | Format-Table Name,@{n='FreeGB';e={[int]($_.Free/1GB)}}
+          (Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB
+          $free = (Get-PSDrive C).Free / 1GB
+          if ($free -lt 120) { Write-Warning "디스크 여유 ${free}GB — Chromium 빌드에는 150GB 이상 권장" }
+
+      - name: git 설정
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.longpaths true
+          git config --global core.preloadindex true
+          git config --global core.fscache true
+
+      - name: depot_tools
+        run: |
+          $dt = "$env:GITHUB_WORKSPACE\depot_tools"
+          if (-not (Test-Path $dt)) {
+            git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git $dt
+          }
+          "$dt" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      - name: Visual Studio 위치 찾기
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio(C++ 데스크톱 워크로드)를 찾을 수 없음' }
+          "vs2022_install=$vs" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "GYP_MSVS_OVERRIDE_PATH=$vs" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Write-Host "VS: $vs"
+
+      - name: .gclient 작성
+        run: |
+          @'
+          solutions = [{
+            "name": "src", "url": "https://chromium.googlesource.com/chromium/src.git",
+            "managed": False, "custom_deps": {},
+            "custom_vars": {"checkout_configuration": "small", "checkout_pgo_profiles": False},
+          }]
+          target_os = ["win"]
+          '@ | Set-Content -Encoding ascii "$env:GITHUB_WORKSPACE\.gclient"
+
+      - name: gclient sync (deps 만, DEPS 고정 버전)
+        working-directory: src
+        run: gclient sync --nohooks --no-history -j 8
+
+      - name: gclient runhooks (clang·rust·node 등 도구 다운로드)
+        working-directory: src
+        run: gclient runhooks
+
+      - name: LASTCHANGE 고정 (스냅샷 저장소라 upstream 커밋 정보가 없음)
+        working-directory: src
+        run: |
+          $sha = (git rev-parse HEAD)
+          $ts = [int][double]::Parse((Get-Date -UFormat %s))
+          Set-Content -NoNewline -Encoding ascii build/util/LASTCHANGE "LASTCHANGE=$sha-refs/heads/main@{#1}"
+          Set-Content -NoNewline -Encoding ascii build/util/LASTCHANGE.committime "$ts"
+
+      - name: gn gen
+        working-directory: src
+        run: |
+          New-Item -ItemType Directory -Force out/swan | Out-Null
+          Copy-Item swan/windows/args.windows.gn out/swan/args.gn -Force
+          gn gen out/swan
+
+      - name: 빌드 (autoninja)
+        working-directory: src
+        run: |
+          $j = '${{ inputs.jobs }}'
+          if ($j) { autoninja -C out/swan -j $j ${{ inputs.target }} } else { autoninja -C out/swan ${{ inputs.target }} }
+
+      - name: 배포 폴더 구성
+        working-directory: src
+        run: |
+          if (-not (Test-Path out/swan/swan.exe)) { throw 'swan.exe 가 없다 — 이름 변경(rename 그룹) 확인' }
+          $dst = "$env:GITHUB_WORKSPACE\dist\SWAN"
+          Remove-Item -Recurse -Force $dst -ErrorAction SilentlyContinue
+          # 실행에 필요한 파일만(오브젝트·라이브러리·심볼·ninja 부산물 제외)
+          robocopy out/swan $dst /E /XD obj gen thinlto-cache .ninja_deps mini_installer_exe_version_resources `
+            /XF *.obj *.lib *.pdb *.ninja *.ninja_log *.ninja_deps *.d *.o *.rsp *.tmp *.exp *.ilk args.gn build.ninja /NFL /NDL /NJH /NJS /NP
+          if ($LASTEXITCODE -ge 8) { throw "robocopy 실패($LASTEXITCODE)" }
+          Get-ChildItem $dst -Filter *.exe | Select-Object Name,@{n='MB';e={[int]($_.Length/1MB)}}
+          Compress-Archive -Path $dst -DestinationPath "$env:GITHUB_WORKSPACE\dist\swan-win-x64.zip" -CompressionLevel Optimal
+
+      - name: 산출물 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: swan-win-x64
+          path: dist/swan-win-x64.zip
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: 빌드 로그 업로드 (실패 시 진단용)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swan-build-logs
+          path: |
+            src/out/swan/.ninja_log
+            src/out/swan/args.gn
+            src/out/swan/siso.INFO*
+          retention-days: 7
+          if-no-files-found: ignore

@@ -1,0 +1,15 @@
+# SWAN — Windows 로컬 빌드용 args (서버 크로스 컴파일 args 에서 xwin/경고 예외를 뺀 것)
+target_os = "win"
+target_cpu = "x64"
+is_debug = false
+is_component_build = false
+is_official_build = false
+symbol_level = 0
+blink_symbol_level = 0
+dcheck_always_on = false
+treat_warnings_as_errors = false
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
+google_api_key = ""
+google_default_client_id = ""
+google_default_client_secret = ""

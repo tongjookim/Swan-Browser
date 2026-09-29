@@ -1,0 +1,7 @@
+[Unit]
+Description=SWAN build CPU limit: 야간 부스트(01:00~07:00): 빌드에 CPU 10코어, 물리 코어 2-7
+
+[Service]
+Type=oneshot
+# swan-build 가 실행 중이 아니면 조용히 무시(-). --runtime: 재부팅 후 남지 않음.
+ExecStart=-/usr/bin/systemctl --runtime set-property swan-build.service CPUQuota=1000% AllowedCPUs=2-7,10-15
