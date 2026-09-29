@@ -24,6 +24,10 @@ jobs:
     runs-on: ${{ fromJSON(github.event.client_payload.runner || inputs.runner || '["self-hosted","windows","x64"]') }}
     timeout-minutes: 350
 
+    defaults:
+      run:
+        shell: powershell
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -31,9 +35,57 @@ jobs:
           fetch-depth: 1
           clean: false
 
+      - name: 빌드 환경 정보
+        run: |
+          Write-Host "##[group]Build environment"
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber
+          Get-CimInstance Win32_ComputerSystem | Select-Object Name, NumberOfLogicalProcessors
+          Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize
+          Write-Host "##[endgroup]"
+
       - name: 빌드 (autoninja)
         working-directory: src
         run: |
-          $j = '${{ github.event.client_payload.jobs || inputs.jobs }}'
-          $target = '${{ github.event.client_payload.target || inputs.target || 'chrome' }}'
-          if ($j) { autoninja -C out/swan -j $j $target } else { autoninja -C out/swan $target }
+          $jobs = '${{ github.event.client_payload.jobs || inputs.jobs }}'
+          $target = '${{ github.event.client_payload.target || inputs.target || "chrome" }}'
+
+          if ($jobs) {
+            autoninja -C out/swan -j $jobs $target
+          } else {
+            autoninja -C out/swan $target
+          }
+
+      - name: 빌드 결과 검증
+        if: success()
+        working-directory: src
+        run: |
+          $target = '${{ github.event.client_payload.target || inputs.target || "chrome" }}'
+          $artifact = "out/swan/$target.exe"
+
+          if (-not (Test-Path $artifact)) {
+            Write-Error "Build artifact not found: $artifact"
+            exit 1
+          }
+
+          Get-Item $artifact | Select-Object FullName, Length
+
+      - name: 빌드 아티팩트 업로드
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: swan-windows-build-${{ github.run_number }}
+          path: src/out/swan/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: 실패 시 최근 로그 출력
+        if: failure()
+        working-directory: src
+        run: |
+          if (Test-Path "out/swan") {
+            Get-ChildItem -Path "out/swan" -Recurse -Include *.log | ForEach-Object {
+              Write-Host "##[group]$($_.FullName)"
+              Get-Content $_.FullName -Tail 100
+              Write-Host "##[endgroup]"
+            }
+          }
